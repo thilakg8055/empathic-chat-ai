@@ -1,20 +1,26 @@
 import { motion } from 'framer-motion';
-import { Brain, Sparkles, Trash2 } from 'lucide-react';
+import { Brain, Sparkles, Trash2, LogOut, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { EMOTION_CONFIG, type EmotionType } from '@/types/emotion';
 
 interface ChatHeaderProps {
   dominantEmotion: EmotionType | null;
   messageCount: number;
+  emotionCount: number;
   onClear: () => void;
+  onSignOut?: () => void;
   isModelLoading: boolean;
+  userName?: string | null;
 }
 
 export const ChatHeader = ({ 
   dominantEmotion, 
   messageCount, 
+  emotionCount,
   onClear,
-  isModelLoading 
+  onSignOut,
+  isModelLoading,
+  userName,
 }: ChatHeaderProps) => {
   const emotionConfig = dominantEmotion ? EMOTION_CONFIG[dominantEmotion] : null;
 
@@ -44,30 +50,54 @@ export const ChatHeader = ({
           <h1 className="font-semibold text-foreground flex items-center gap-2">
             EmotiChat
             {emotionConfig && (
-              <span className={`text-lg`}>{emotionConfig.icon}</span>
+              <span className="text-lg">{emotionConfig.icon}</span>
             )}
           </h1>
           <p className="text-xs text-muted-foreground">
             {isModelLoading 
               ? 'Loading AI model...' 
-              : messageCount > 0 
-                ? `${messageCount} messages • ${emotionConfig ? emotionConfig.label + ' vibes' : 'Analyzing emotions'}`
-                : 'Emotion-aware AI assistant'
+              : emotionCount > 0 
+                ? `${emotionCount} emotions tracked • ${emotionConfig ? emotionConfig.label + ' vibes' : 'Live tracking'}`
+                : messageCount > 0
+                  ? `${messageCount} messages`
+                  : 'Emotion-aware AI assistant'
             }
           </p>
         </div>
       </div>
 
-      {messageCount > 0 && (
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onClear}
-          className="text-muted-foreground hover:text-destructive"
-        >
-          <Trash2 className="w-4 h-4" />
-        </Button>
-      )}
+      <div className="flex items-center gap-2">
+        {userName && (
+          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary/50">
+            <User className="w-3.5 h-3.5 text-muted-foreground" />
+            <span className="text-xs text-muted-foreground">{userName}</span>
+          </div>
+        )}
+
+        {messageCount > 0 && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onClear}
+            className="text-muted-foreground hover:text-destructive"
+            title="Clear chat & history"
+          >
+            <Trash2 className="w-4 h-4" />
+          </Button>
+        )}
+
+        {onSignOut && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onSignOut}
+            className="text-muted-foreground hover:text-foreground"
+            title="Sign out"
+          >
+            <LogOut className="w-4 h-4" />
+          </Button>
+        )}
+      </div>
     </motion.header>
   );
 };

@@ -4,21 +4,26 @@ import { ChatHeader } from '@/components/ChatHeader';
 import { ChatMessage } from '@/components/ChatMessage';
 import { ChatInput } from '@/components/ChatInput';
 import { TypingIndicator } from '@/components/TypingIndicator';
-import { EmotionTrendChart } from '@/components/EmotionTrendChart';
+import { LiveEmotionGraph } from '@/components/LiveEmotionGraph';
+import { AuthForm } from '@/components/AuthForm';
 import { useEmotionChat } from '@/hooks/useEmotionChat';
+import { useAuth } from '@/hooks/useAuth';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import type { EmotionType } from '@/types/emotion';
 
 const Index = () => {
+  const { user, loading: authLoading, signIn, signUp, signOut } = useAuth();
+  
   const {
     messages,
     isLoading,
     isModelLoading,
-    emotionHistory,
-    emotionStats,
+    emotionRecords,
+    emotionLoading,
     dominantEmotion,
     sendMessage,
     clearMessages,
-  } = useEmotionChat();
+  } = useEmotionChat(user?.id);
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -28,17 +33,44 @@ const Index = () => {
     }
   }, [messages, isLoading]);
 
+  // Show loading while checking auth
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background via-background to-secondary/30 flex items-center justify-center">
+        <motion.div
+          className="w-12 h-12 border-3 border-primary/30 border-t-primary rounded-full"
+          animate={{ rotate: 360 }}
+          transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+        />
+      </div>
+    );
+  }
+
+  // Show auth form if not logged in
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background via-background to-secondary/30 flex items-center justify-center p-4">
+        <AuthForm onSignIn={signIn} onSignUp={signUp} />
+      </div>
+    );
+  }
+
+  const userName = user.user_metadata?.display_name || user.email?.split('@')[0];
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-secondary/30">
       <div className="container max-w-7xl mx-auto p-4 md:p-6 lg:p-8">
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-6 h-[calc(100vh-4rem)]">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-6 h-[calc(100vh-4rem)]">
           {/* Main Chat Area */}
           <div className="flex flex-col gap-4 min-h-0">
             <ChatHeader
-              dominantEmotion={dominantEmotion}
+              dominantEmotion={dominantEmotion as EmotionType | null}
               messageCount={messages.length}
+              emotionCount={emotionRecords.length}
               onClear={clearMessages}
+              onSignOut={signOut}
               isModelLoading={isModelLoading}
+              userName={userName}
             />
 
             {/* Messages */}
@@ -53,12 +85,11 @@ const Index = () => {
                     >
                       <div className="text-6xl mb-4">💭</div>
                       <h2 className="text-xl font-semibold text-foreground mb-2">
-                        Welcome to EmotiChat
+                        Hey {userName}! 👋
                       </h2>
                       <p className="text-muted-foreground max-w-md text-sm">
-                        I'm an emotion-aware AI assistant. Share how you're feeling, 
-                        and I'll respond with empathy and understanding. Your emotional 
-                        journey will be visualized as we chat.
+                        I'm EmotiChat, your emotion-aware AI companion. Share how you're feeling, 
+                        and I'll respond with empathy. Your emotions are tracked in real-time!
                       </p>
                       <div className="flex gap-2 mt-6 flex-wrap justify-center">
                         {['😊 "I had a great day!"', '😔 "Feeling down today"', '😤 "So frustrated right now"'].map((suggestion) => (
@@ -96,11 +127,14 @@ const Index = () => {
             />
           </div>
 
-          {/* Sidebar - Emotion Trends */}
+          {/* Sidebar - Live Emotion Graph */}
           <div className="hidden lg:block">
-            <EmotionTrendChart
-              history={emotionHistory}
-              stats={emotionStats}
+            <LiveEmotionGraph
+              emotionRecords={emotionRecords.map(r => ({
+                ...r,
+                emotion: r.emotion as EmotionType,
+              }))}
+              loading={emotionLoading}
             />
           </div>
         </div>
