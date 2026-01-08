@@ -1,13 +1,13 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import type { Message, EmotionResult } from '@/types/emotion';
+import type { Message, EmotionResult, EmotionType } from '@/types/emotion';
 import { detectEmotion, preloadModel } from '@/services/emotionDetector';
-import { useEmotionHistory } from './useEmotionHistory';
+import { useEmotionDatabase } from './useEmotionDatabase';
 
-export const useEmotionChat = () => {
+export const useEmotionChat = (userId?: string) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isModelLoading, setIsModelLoading] = useState(true);
-  const { history, stats, dominantEmotion, addEmotion, clearHistory, recentEmotions } = useEmotionHistory();
+  const { emotionRecords, loading: emotionLoading, saveEmotion, clearEmotions } = useEmotionDatabase(userId);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -24,6 +24,37 @@ export const useEmotionChat = () => {
     loadModel();
   }, []);
 
+  // Derive stats from database records
+  const emotionStats = useCallback(() => {
+    if (emotionRecords.length === 0) return [];
+    
+    const counts: Record<EmotionType, number> = {
+      joy: 0, sadness: 0, anger: 0, fear: 0, 
+      surprise: 0, disgust: 0, neutral: 0
+    };
+    
+    emotionRecords.forEach(record => {
+      const emotion = record.emotion as EmotionType;
+      if (counts[emotion] !== undefined) {
+        counts[emotion]++;
+      }
+    });
+    
+    return Object.entries(counts)
+      .map(([emotion, count]) => ({
+        emotion: emotion as EmotionType,
+        count,
+        percentage: (count / emotionRecords.length) * 100,
+      }))
+      .filter(stat => stat.count > 0)
+      .sort((a, b) => b.count - a.count);
+  }, [emotionRecords]);
+
+  const dominantEmotion = useCallback((): EmotionType | null => {
+    const stats = emotionStats();
+    return stats.length > 0 ? stats[0].emotion : null;
+  }, [emotionStats]);
+
   const sendMessage = useCallback(async (content: string) => {
     if (!content.trim() || isLoading) return;
 
@@ -31,7 +62,16 @@ export const useEmotionChat = () => {
     let userEmotion: EmotionResult | undefined;
     try {
       userEmotion = await detectEmotion(content);
-      addEmotion(userEmotion.emotion, userEmotion.confidence);
+      
+      // Save to database if user is authenticated
+      if (userId && userEmotion) {
+        await saveEmotion(
+          userEmotion.emotion,
+          userEmotion.confidence,
+          userEmotion.sentiment,
+          content
+        );
+      }
     } catch (error) {
       console.error('Emotion detection failed:', error);
     }
@@ -47,7 +87,6 @@ export const useEmotionChat = () => {
     setMessages(prev => [...prev, userMessage]);
     setIsLoading(true);
 
-    // Cancel any pending request
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
@@ -133,7 +172,6 @@ export const useEmotionChat = () => {
               );
             }
           } catch {
-            // Partial JSON, put back and wait for more
             textBuffer = line + '\n' + textBuffer;
             break;
           }
@@ -172,7 +210,6 @@ export const useEmotionChat = () => {
       }
       console.error('Chat error:', error);
       
-      // Add error message
       setMessages(prev => 
         prev.map(m => 
           m.id === assistantMessage.id 
@@ -183,24 +220,26 @@ export const useEmotionChat = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [messages, isLoading, addEmotion]);
+  }, [messages, isLoading, userId, saveEmotion]);
 
-  const clearMessages = useCallback(() => {
+  const clearMessages = useCallback(async () => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
     setMessages([]);
-    clearHistory();
-  }, [clearHistory]);
+    if (userId) {
+      await clearEmotions();
+    }
+  }, [userId, clearEmotions]);
 
   return {
     messages,
     isLoading,
     isModelLoading,
-    emotionHistory: history,
-    emotionStats: stats,
-    dominantEmotion,
-    recentEmotions,
+    emotionRecords,
+    emotionLoading,
+    emotionStats: emotionStats(),
+    dominantEmotion: dominantEmotion(),
     sendMessage,
     clearMessages,
   };

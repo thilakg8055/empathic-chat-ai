@@ -1,1 +1,8 @@
 project_id = "idjhpasesknjsefyoxoz"
+
+[api]
+enabled = true
+port = 54321
+
+[functions.emotion-chat]
+verify_jwt = false
